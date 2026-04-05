@@ -1,0 +1,9 @@
+GRPO 运行记录
+====================
+status: timeout
+config_name: temp_soft_margin_loose
+timeout_seconds: 300
+num_eval_samples: 30
+started_at: 2026-03-28T13:43:03Z
+ended_at: 2026-03-28T13:48:04Z
+hypothesis: temp_soft plus a slightly looser answer-group margin may recover near-miss groups that the current margin drops

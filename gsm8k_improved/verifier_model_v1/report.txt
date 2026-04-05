@@ -1,0 +1,13 @@
+Verifier baseline training
+==========================
+pointwise_train_rows: 1627
+pointwise_dev_rows: 350
+pointwise_dev_accuracy: 0.651429
+pointwise_dev_average_precision: 0.720473
+pointwise_dev_roc_auc: 0.7282555282555283
+pairwise_train_rows: 553
+pairwise_dev_rows: 105
+pairwise_dev_accuracy: 0.466667
+pairwise_dev_ties: 1
+bundle_path: /home/user/图片/gsm8k_improved/verifier_model_v1/verifier_bundle.pkl
+metrics_path: /home/user/图片/gsm8k_improved/verifier_model_v1/metrics.json

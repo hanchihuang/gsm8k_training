@@ -1,0 +1,10 @@
+Reranker baseline training
+==========================
+pairwise_train_rows: 94
+pairwise_dev_rows: 23
+pairwise_dev_accuracy: 0.391304347826087
+pairwise_dev_average_precision: 0.5791644943699011
+pairwise_dev_roc_auc: 0.5500945179584121
+listwise_dev_rows: 40
+listwise_dev_top1_accuracy: 0.275
+bundle_path: /home/user/图片/gsm8k_improved/reranker_model_v1_from200_c1/reranker_bundle.pkl

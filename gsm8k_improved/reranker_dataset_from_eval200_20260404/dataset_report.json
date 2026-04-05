@@ -1,0 +1,7 @@
+{
+  "run_summary": "/home/user/图片/gsm8k_improved/evalonly_candidate_logging200_20260404/run_summary.json",
+  "section": "eval_after",
+  "rows_with_candidates": 200,
+  "pairwise_rows": 117,
+  "hard_case_count": 37
+}

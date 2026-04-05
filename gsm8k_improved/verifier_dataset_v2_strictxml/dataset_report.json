@@ -1,0 +1,27 @@
+{
+  "input_pointwise_rows": 1977,
+  "output_pointwise_rows": 2471,
+  "input_pairwise_rows": 658,
+  "output_pairwise_rows": 786,
+  "pair_type_counts": {
+    "exact_vs_wrong": 391,
+    "better_wrong_vs_worse_wrong": 267,
+    "strict_exact_vs_exact_non_strict": 26,
+    "strict_exact_vs_close_wrong": 44,
+    "strict_exact_vs_medium_wrong": 58
+  },
+  "augmentation_tags": {
+    "base": 1977,
+    "exact_non_strict_dup_1": 32,
+    "exact_non_strict_dup_2": 32,
+    "exact_non_strict_dup_3": 32,
+    "strict_close_wrong_dup_1": 199,
+    "strict_close_wrong_dup_2": 199
+  },
+  "config": {
+    "close_error_threshold": 5,
+    "medium_error_threshold": 20,
+    "duplicate_close_wrong": 2,
+    "duplicate_exact_nonstrict": 3
+  }
+}

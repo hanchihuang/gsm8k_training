@@ -1,0 +1,74 @@
+{
+  "config": {
+    "direction": "higher",
+    "execution_policy": "danger_full_access",
+    "goal": "Improve GSM8K confirm200 exact-match beyond the retained 0.495 line by keeping the retained mainline as anchor while expanding strategy space beyond narrow scout rerank micro-tuning.",
+    "guard": "python3 -m py_compile '/home/user/\u56fe\u7247/llama3_1_(8b)_grpo.py'",
+    "iterations": null,
+    "metric": "gsm8k_exact_match_rate_test200",
+    "parallel_mode": "serial",
+    "repos": [
+      {
+        "path": "/home/user/\u56fe\u7247",
+        "role": "primary",
+        "scope": "/home/user/\u56fe\u7247/llama3_1_(8b)_grpo.py,/home/user/\u56fe\u7247/gsm8k_improved,/home/user/\u56fe\u7247/outputs_llama3_1_grpo_*"
+      }
+    ],
+    "rollback_policy": "manual_file_revert",
+    "scope": "/home/user/\u56fe\u7247/llama3_1_(8b)_grpo.py,/home/user/\u56fe\u7247/gsm8k_improved,/home/user/\u56fe\u7247/outputs_llama3_1_grpo_*",
+    "session_mode": "background",
+    "stop_condition": null,
+    "verify": "DATASET_SOURCE=gsm8k NUM_EVAL_SAMPLES=30 MAX_TRAIN_SAMPLES=1000 SFT_WARMUP_STEPS=20 MAX_STEPS=20 EVAL_USE_CONFIDENCE_RERANK=1 EVAL_NUM_CANDIDATES=8 python3 /home/user/\u56fe\u7247/llama3_1_\\(8b\\)_grpo.py",
+    "web_search": "enabled"
+  },
+  "mode": "loop",
+  "run_tag": "gsm8k_retained0495_broadscope_20260404_replan01",
+  "state": {
+    "baseline_metric": 0.47,
+    "best_iteration": 7,
+    "best_metric": 0.5,
+    "blocked": 0,
+    "consecutive_discards": 4,
+    "crashes": 0,
+    "current_labels": [
+      "verifier_guided_selection",
+      "slice_aware_shaping",
+      "failure_slice_eval_gate",
+      "retained_control"
+    ],
+    "current_metric": 0.5,
+    "discards": 7,
+    "iteration": 11,
+    "keeps": 1,
+    "last_commit": "no_git_repo",
+    "last_repo_commits": {
+      "/home/user/\u56fe\u7247": "no_git_repo"
+    },
+    "last_status": "refine",
+    "last_trial_commit": "no_git_repo",
+    "last_trial_labels": [],
+    "last_trial_metric": 0.5,
+    "last_trial_repo_commits": {
+      "/home/user/\u56fe\u7247": "no_git_repo"
+    },
+    "no_ops": 0,
+    "pivot_count": 0
+  },
+  "supervisor": {
+    "last_exit_kind": "state_inconsistent",
+    "last_observed_iteration": 11,
+    "last_observed_metric": 0.5,
+    "last_observed_signature": "{\"iteration\":11,\"last_status\":\"refine\",\"last_trial_commit\":\"no_git_repo\",\"last_trial_labels\":[],\"last_trial_metric\":0.5}",
+    "last_observed_status": "refine",
+    "last_observed_updated_at": "2026-04-04T11:12:57Z",
+    "last_reason": "Results log and JSON state diverged; unattended relaunch is unsafe.",
+    "last_turn_finished_at": "2026-04-04T11:13:13Z",
+    "recommended_action": "needs_human",
+    "restart_count": 4,
+    "should_continue": false,
+    "stagnation_count": 0,
+    "terminal_reason": "state_inconsistent"
+  },
+  "updated_at": "2026-04-04T11:12:57Z",
+  "version": 1
+}

@@ -1,0 +1,18 @@
+Verifier baseline training
+==========================
+training_mode: pairwise
+feature_mode: hybrid
+pointwise_train_rows: 0
+pointwise_dev_rows: 0
+pointwise_dev_accuracy: None
+pointwise_dev_average_precision: None
+pointwise_dev_roc_auc: None
+pairwise_train_rows: 650
+pairwise_dev_rows: 160
+pairwise_dev_accuracy: 0.481250
+pairwise_dev_average_precision: 0.5880097789301849
+pairwise_dev_roc_auc: 0.5280078125000001
+pairwise_dev_margin_mean: 0.09385417140032003
+pairwise_dev_ties: None
+bundle_path: /home/user/图片/gsm8k_improved/verifier_model_v7_failure_targeted_c1/verifier_bundle.pkl
+metrics_path: /home/user/图片/gsm8k_improved/verifier_model_v7_failure_targeted_c1/metrics.json

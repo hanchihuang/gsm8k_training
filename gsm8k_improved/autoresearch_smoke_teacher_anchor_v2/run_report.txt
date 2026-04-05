@@ -1,0 +1,232 @@
+GRPO 运行记录
+====================
+smoke_test: False
+model_name: Qwen/Qwen2.5-0.5B-Instruct
+dataset_source: gsm8k
+dataset_name: gsm8k
+eval_dataset_name: gsm8k_test
+dataset_split: train
+dataset_config: main
+dataset_start_index: 0
+max_train_samples: 16
+num_eval_samples: 4
+train_dataset_size: 64
+leakage_check_passed: True
+max_steps: 1
+max_seq_length: 512
+max_prompt_length: 256
+max_completion_length: 256
+num_generations: 2
+per_device_train_batch_size: 2
+
+运行配置
+--------------------
+{
+  "random_seed": 42,
+  "run_mode": "single",
+  "run_protocol": "standard",
+  "training_method": "grpo",
+  "eval_only": false,
+  "skip_eval_before": true,
+  "skip_eval_warmup": true,
+  "skip_sample_generation": true,
+  "save_adapter": true,
+  "write_explanation": true,
+  "adapter_path": "",
+  "continuation_safe_dynamics": false,
+  "synthetic_sft_only": false,
+  "teacher_completion_bank_path": "/home/user/图片/gsm8k_improved/train_teacher_bank_pct_ratio_v1.json",
+  "enable_teacher_completion_replay": true,
+  "enable_grpo_teacher_anchor": true,
+  "teacher_replay_count": 4,
+  "teacher_replay_slices": [
+    "percentage",
+    "rate_or_ratio"
+  ],
+  "enable_sft_teacher_bank_priority": false,
+  "sft_teacher_bank_target": null,
+  "sft_teacher_bank_keep_aux_count": null,
+  "sft_teacher_bank_slices": [
+    "percentage",
+    "rate_or_ratio"
+  ],
+  "enable_dynamic_teacher_replay": false,
+  "dynamic_teacher_replay_count": 0,
+  "dynamic_teacher_replay_slices": [
+    "percentage",
+    "rate_or_ratio"
+  ],
+  "enable_anchor_replay": false,
+  "anchor_replay_count": 0,
+  "anchor_replay_slices": [
+    "basic_arithmetic",
+    "difference",
+    "multi_number"
+  ],
+  "output_dir": "/home/user/图片/gsm8k_improved/autoresearch_smoke_teacher_anchor_v2",
+  "experiment_hypothesis": "",
+  "experiment_risk": "",
+  "experiment_note": "",
+  "grpo_dynamics": {
+    "learning_rate": 2e-05,
+    "beta": 0.0,
+    "epsilon": 0.2,
+    "warmup_ratio": 0.1,
+    "max_grad_norm": 0.1
+  }
+}
+
+Rerank 配置
+--------------------
+{
+  "eval_use_confidence_rerank": false,
+  "eval_num_candidates": 4,
+  "eval_rerank_temperature": 0.7,
+  "eval_rerank_top_p": 0.95,
+  "confidence_weight": 1.0,
+  "consensus_weight": 0.35,
+  "format_weight": 0.15,
+  "low_confidence_prob_threshold": 0.25,
+  "low_confidence_weight": 0.35,
+  "novelty_weight": 0.1,
+  "answer_agg_count_weight": 0.85,
+  "answer_agg_strict_weight": 0.2,
+  "answer_agg_equation_weight": 0.25,
+  "answer_agg_diversity_weight": 0.08,
+  "answer_agg_low_conf_weight": 0.2,
+  "answer_agg_min_group_size": 2,
+  "answer_agg_margin": 0.24,
+  "answer_agg_pair_count_weight": 0.45,
+  "answer_agg_pair_max_single_gap": 0.12,
+  "verifier_bundle_path": "",
+  "verifier_score_weight": 0.2,
+  "verifier_tie_margin": 0.15,
+  "verifier_min_candidates": 2,
+  "verifier_require_answer_disagreement": true
+}
+
+训练指标
+--------------------
+{
+  "train_runtime": 4.9156,
+  "train_samples_per_second": 0.407,
+  "train_steps_per_second": 0.203,
+  "total_flos": 0.0,
+  "train_loss": 0.5379880666732788
+}
+
+训练前生成
+--------------------
+<skipped>
+
+训练后生成
+--------------------
+<skipped>
+
+训练前评测
+--------------------
+{
+  "num_eval_samples": 0,
+  "exact_match_count": 0,
+  "exact_match_rate": 0.0,
+  "answer_tag_rate": 0.0,
+  "strict_xml_rate": 0.0,
+  "numeric_answer_rate": 0.0,
+  "correctness_reward_mean": 0.0,
+  "distance_reward_mean": 0.0,
+  "mean_abs_error": null,
+  "rows": []
+}
+
+SFT Warmup 后评测
+--------------------
+null
+
+训练后评测
+--------------------
+{
+  "num_eval_samples": 4,
+  "exact_match_count": 1,
+  "exact_match_rate": 0.25,
+  "answer_tag_rate": 1.0,
+  "strict_xml_rate": 0.75,
+  "numeric_answer_rate": 1.0,
+  "correctness_reward_mean": 1.5,
+  "distance_reward_mean": 0.0625,
+  "mean_abs_error": 1340.75,
+  "slice_metrics": {
+    "percentage": {
+      "count": 1,
+      "exact_match_rate": 0.0,
+      "strict_xml_rate": 1.0
+    },
+    "rate_or_ratio": {
+      "count": 3,
+      "exact_match_rate": 0.3333333333333333,
+      "strict_xml_rate": 0.6666666666666666
+    }
+  },
+  "failure_breakdown": {
+    "exact_match": 1,
+    "large_numeric_error": 2,
+    "medium_numeric_error": 1
+  },
+  "rows": [
+    {
+      "question": "Janet’s ducks lay 16 eggs per day. She eats three for breakfast every morning and bakes muffins for her friends every day with four. She sells the remainder at the farmers' market daily for $2 per fresh duck egg. How much in dollars does she make every day at the farmers' market?",
+      "gold_answer": "18",
+      "predicted_answer": "18",
+      "exact_match": true,
+      "has_answer_tag": true,
+      "has_strict_xml": false,
+      "is_numeric_answer": true,
+      "correctness_reward": 6.0,
+      "distance_reward": 0.0,
+      "abs_error": 0,
+      "raw_completion": "<reasoning>\nJanet's total earnings from selling the eggs can be calculated by subtracting the number of eggs eaten from the number of eggs laid, then multiplying that result by the price per egg. The calculation is as follows:\n\n- Eggs laid: 16\n- Breakfast consumption: 3\n- Muffin baking: 4\n\nTotal eggs consumed = 3 + 4 = 7\n\nEarnings from eggs = 16 - 7 = 9\n\nPrice per egg = $2\n\nTotal earnings = 9 * 2 = 18\n\nTherefore, Janet makes $18 every day at the farmers' market.\n\n<answer>18</answer>"
+    },
+    {
+      "question": "A robe takes 2 bolts of blue fiber and half that much white fiber.  How many bolts in total does it take?",
+      "gold_answer": "3",
+      "predicted_answer": "6",
+      "exact_match": false,
+      "has_answer_tag": true,
+      "has_strict_xml": true,
+      "is_numeric_answer": true,
+      "correctness_reward": 0.0,
+      "distance_reward": 0.25,
+      "abs_error": 3,
+      "raw_completion": "<reasoning>\nIt takes 4 bolts of blue fiber and half that amount, which is 2 bolts of white fiber.\n</reasoning>\n<answer>6</answer>"
+    },
+    {
+      "question": "Josh decides to try flipping a house.  He buys a house for $80,000 and then puts in $50,000 in repairs.  This increased the value of the house by 150%.  How much profit did he make?",
+      "gold_answer": "70000",
+      "predicted_answer": "65000",
+      "exact_match": false,
+      "has_answer_tag": true,
+      "has_strict_xml": true,
+      "is_numeric_answer": true,
+      "correctness_reward": 0.0,
+      "distance_reward": 0.0,
+      "abs_error": 5000,
+      "raw_completion": "<reasoning>\nJosh's house was initially worth $80,000 + $50,000 = $130,000.\nThe increase in value is 150% of $130,000, which is 1.5 * $130,000 = $195,000.\nTo find the profit, we subtract the initial cost from the increased value: $195,000 - $130,000 = $65,000.\nTherefore, Josh made a profit of $65,000.\n</reasoning>\n<answer>$65,000</answer>"
+    },
+    {
+      "question": "James decides to run 3 sprints 3 times a week.  He runs 60 meters each sprint.  How many total meters does he run a week?",
+      "gold_answer": "540",
+      "predicted_answer": "180",
+      "exact_match": false,
+      "has_answer_tag": true,
+      "has_strict_xml": true,
+      "is_numeric_answer": true,
+      "correctness_reward": 0.0,
+      "distance_reward": 0.0,
+      "abs_error": 360,
+      "raw_completion": "<reasoning>\nJames runs 3 sprints per week, and each sprint is 60 meters long. Therefore, the total distance he runs in one week is calculated by multiplying the number of sprints by the length of each sprint: 3 * 60 = 180 meters.\n</reasoning>\n<answer>180</answer>"
+    }
+  ]
+}
+
+Held-out 曲线
+--------------------
+[]

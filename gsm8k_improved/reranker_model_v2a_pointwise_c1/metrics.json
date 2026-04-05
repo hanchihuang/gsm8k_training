@@ -1,0 +1,26 @@
+{
+  "pairwise": {
+    "train_rows": 94,
+    "dev_rows": 23,
+    "dev_pairwise_accuracy": 0.4782608695652174,
+    "dev_pairwise_average_precision": 0.5764038971285342,
+    "dev_pairwise_roc_auc": 0.5122873345935728
+  },
+  "listwise": {
+    "dev_rows": 40,
+    "dev_top1_accuracy": 0.425
+  },
+  "model": {
+    "type": "tfidf_logistic_regression_pairwise_reranker",
+    "solver": "liblinear",
+    "c": 1.0,
+    "max_features": 60000,
+    "min_df": 1,
+    "feature_mode": "hybrid",
+    "dev_count": 40,
+    "training_mode": "pointwise",
+    "positive_upweight": 2.0,
+    "hard_negative_upweight": 4.0,
+    "quality_weight_scale": 1.5
+  }
+}

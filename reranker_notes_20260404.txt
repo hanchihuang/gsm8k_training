@@ -1,0 +1,157 @@
+Reranker Notes
+===============
+
+1. 这轮实验在做什么
+--------------------
+这轮做的是一个在线 A/B：不重新训练主模型，只改“从 8 个候选答案里最终选哪一个”的重排强度。
+
+流程：
+1. 同一道 GSM8K 题，主模型先采样出多个候选答案。
+2. 原系统会基于已有的 rerank_score 选一个最终答案。
+3. 额外训练一个 reranker，给每个候选再打一个“更像正确答案”的分数。
+4. 在线实验里用混合分数做最终选择：
+   final_score = original_rerank_score + weight * reranker_score
+5. 扫的超参就是 RERANKER_SCORE_WEIGHT，例如 0.25 / 1.0 / 2.0。
+
+当前 30 题线上结果：
+- w=0.25: 16/30
+- w=1.0: 17/30
+- w=2.0: 16/30
+
+结论：
+- reranker 不是没信号，因为从 0.25 到 1.0 确实救回了 1 题。
+- 但权重不是越大越好，2.0 已经开始过推，会把原本对的题推错。
+- 当前线上最稳的点是 RERANKER_SCORE_WEIGHT=1.0。
+
+
+2. 训练的 reranker 是怎么训练的
+------------------------------
+现在这版 reranker 不是神经网络，而是一个轻量的 TF-IDF + LogisticRegression 分类器。
+
+训练脚本：
+/home/user/图片/gsm8k_improved/train_reranker_baseline.py
+
+核心思路：
+把“题目 + 某个候选答案 + 这个候选的元信息”拼成一段文本，训练一个二分类器，判断这个候选是不是正确答案。线上推理时，对同一道题的多个候选分别打分，谁分高谁更应该被选中。
+
+训练数据有两种来源：
+- pairwise_reranker_train.jsonl
+- listwise_reranker_train.jsonl
+
+每个候选会被转成一段训练文本，包含：
+- question
+- predicted_answer
+- completion 全文
+- 离散化后的 meta token，例如：
+  meta_answer_tag_1
+  meta_strict_xml_1
+  meta_numeric_1
+  meta_conf_bucket_x
+  meta_consensus_x
+  meta_verifier_bucket_x
+  meta_equation_bucket_x
+  meta_novelty_bucket_x
+
+特征：
+- 默认是 hybrid TF-IDF
+- 词级 ngram: (1,2)
+- 字符级 ngram: (3,5)
+
+模型：
+- LogisticRegression
+- class_weight="balanced"
+- solver="liblinear"
+
+当前主用训练目标是 pointwise，不是最早那版 pairwise。
+
+pointwise 模式：
+- 对 listwise 数据里的每个 candidate 单独做样本
+- label=1 作为正例
+- label=0 作为负例
+- 正样本额外上权重 positive_upweight
+- 如果负样本的原始 rerank_score 已经高得危险，会额外上 hard_negative_upweight
+- 若正样本带 quality_score，还会加一个 bonus
+
+训练完成后会导出：
+- reranker_bundle.pkl
+  里面包含 vectorizer、model、metrics
+
+
+3. pairwise/listwise 训练集是怎么从 eval200 抽出来的
+----------------------------------------------------
+这两个训练集不是人工标注，而是从一次保存了候选答案的 200 题评测结果里自动抽出来的。
+
+生成脚本：
+/home/user/图片/gsm8k_improved/build_reranker_dataset_from_eval.py
+
+本次来源 run：
+/home/user/图片/gsm8k_improved/evalonly_candidate_logging200_20260404/run_summary.json
+
+读取 section：
+- eval_after
+
+本次数据报告：
+/home/user/图片/gsm8k_improved/reranker_dataset_from_eval200_20260404/dataset_report.json
+
+统计：
+- rows_with_candidates: 200
+- pairwise_rows: 117
+- hard_case_count: 37
+
+打标规则：
+1. 先把答案归一化，只抽最后一个整数。
+2. 如果 candidate.predicted_answer == gold_answer，则 label=1，否则 label=0。
+
+质量分 quality_score：
+- 严格 XML 且答案对：1000 + rerank_score
+- 答案对但 XML 不严格：700 + rerank_score
+- 答案错：rerank_score
+
+Listwise：
+- 每一行是一道题
+- 保存这道题的全部候选
+- 每个候选都保留原始字段，并追加 label 和 quality_score
+- 候选按 quality_score 从高到低排序
+
+Pairwise：
+- 每一行是一对 chosen / rejected
+- 两种 pair_type：
+  1. gold_available_but_not_selected
+     候选里明明有正确答案，但原系统按 rerank_score 选错了。
+     chosen = 最好的正确候选
+     rejected = 原系统实际选中的错误候选
+  2. gold_vs_best_wrong
+     候选里既有正确也有错误。
+     chosen = 最好的正确候选
+     rejected = 最强的错误候选
+
+一句话概括：
+先跑一次带候选日志的 eval200，再按 gold answer 自动打标，导出成：
+- listwise = 同题全候选
+- pairwise = 正确候选 vs 最该被压下去的错误候选
+
+
+4. 为什么 v2 pointwise 比 v1 pairwise 更对路
+--------------------------------------------
+核心原因是：线上真实推理场景是“对单个 candidate 分别打分，再从一组 candidate 里选 top1”，这本质上更像 pointwise，而不是纯 pairwise 差分学习。
+
+v1 pairwise 的问题：
+- 它学的是 chosen - rejected 的差分方向。
+- 训练目标是“这两个里谁更好”，而不是“这个 candidate 本身值不值得选”。
+- 但线上混合时，实际用法是把 reranker 的单个分数加到原始 rerank_score 上。
+- 如果训练目标和推理使用方式不一致，模型可能学到了比较关系，但单点评分不稳定，线上就推不动或者推偏。
+
+v2 pointwise 的优势：
+- 直接学 candidate -> 正确/错误 概率。
+- 训练产物天然就是单候选分数，更贴合线上混合方式。
+- listwise 数据覆盖的是每题所有候选，不只是一对 chosen/rejected，监督更完整。
+- 加了正样本上权重和 hard negative 上权重之后，模型更容易学到：
+  “哪些表面上分数高、但其实是错的候选应该被压下去。”
+
+实际表现也符合这个判断：
+- v1 在线 30 题基本和 baseline 持平
+- v2 的离线 listwise_dev_top1_accuracy 明显更高
+- 在线上，v2 在合适权重下已经能真正改动最终选择
+
+一句话总结：
+v2 更好，不是因为模型更复杂，而是因为训练目标终于和线上使用方式对齐了。

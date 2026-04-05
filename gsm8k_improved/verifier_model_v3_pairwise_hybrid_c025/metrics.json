@@ -1,0 +1,24 @@
+{
+  "split": {
+    "dev_mod": 5,
+    "dev_bucket": 0
+  },
+  "pointwise": {},
+  "pairwise_eval": {
+    "train_rows": 553,
+    "dev_rows": 105,
+    "dev_pairwise_accuracy": 0.5714285714285714,
+    "dev_pairwise_average_precision": 0.6222490128611794,
+    "dev_pairwise_roc_auc": 0.627845804988662,
+    "dev_pairwise_margin_mean": 0.029641204226506197
+  },
+  "model": {
+    "type": "tfidf_logistic_regression_pairwise",
+    "solver": "liblinear",
+    "c": 0.25,
+    "max_features": 50000,
+    "min_df": 2,
+    "training_mode": "pairwise",
+    "feature_mode": "hybrid"
+  }
+}

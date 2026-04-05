@@ -1,0 +1,10 @@
+Verifier dataset build
+======================
+summary_files: 19
+raw_candidates: 2060
+questions: 260
+questions_with_exact: 172
+pairwise_rows: 658
+pointwise_rows: 1977
+pairwise_path: /home/user/图片/gsm8k_improved/verifier_dataset_v1/pairwise_verifier_train.jsonl
+pointwise_path: /home/user/图片/gsm8k_improved/verifier_dataset_v1/pointwise_verifier_train.jsonl

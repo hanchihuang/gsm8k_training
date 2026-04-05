@@ -6,6 +6,8 @@
 !reranker_notes_20260404.txt
 !gsm8k_improved/
 !gsm8k_improved/**/
+!multi-agent-autoresearch/
+!multi-agent-autoresearch/**/
 !gsm8k_improved/**/*.py
 !gsm8k_improved/**/*.sh
 !gsm8k_improved/**/*.md
@@ -14,6 +16,15 @@
 !gsm8k_improved/**/run_report.txt
 !gsm8k_improved/**/metrics.json
 !gsm8k_improved/**/dataset_report.json
+!multi-agent-autoresearch/**/*.py
+!multi-agent-autoresearch/**/*.sh
+!multi-agent-autoresearch/**/*.md
+!multi-agent-autoresearch/**/*.txt
+!multi-agent-autoresearch/**/*.toml
+!multi-agent-autoresearch/**/run_summary.json
+!multi-agent-autoresearch/**/run_report.txt
+!multi-agent-autoresearch/**/metrics.json
+!multi-agent-autoresearch/**/dataset_report.json
 
 gsm8k_improved/**/adapter/
 gsm8k_improved/**/checkpoint-*/
@@ -23,3 +34,5 @@ gsm8k_improved/**/*.pt
 gsm8k_improved/**/*.pth
 gsm8k_improved/**/*.arrow
 gsm8k_improved/**/*.log
+multi-agent-autoresearch/**/__pycache__/
+multi-agent-autoresearch/**/*.log

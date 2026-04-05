@@ -25,6 +25,10 @@ copy_relpaths = [
     Path("reranker_notes_20260404.txt"),
 ]
 
+project_roots = [
+    Path("multi-agent-autoresearch"),
+]
+
 allowed_names = {
     "run_summary.json",
     "run_report.txt",
@@ -67,6 +71,26 @@ for rel in copy_relpaths:
         dst_path = dst / rel
         dst_path.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src_path, dst_path)
+
+for project_root in project_roots:
+    src_project = src / project_root
+    if not src_project.exists():
+        continue
+    for path in src_project.rglob("*"):
+        rel = path.relative_to(src)
+        if path.is_dir():
+            continue
+        parts = rel.parts
+        if any(part in skip_dir_names for part in parts):
+            continue
+        if any(part.startswith(skip_prefixes) for part in parts):
+            continue
+        if path.suffix in skip_suffixes:
+            continue
+        if should_copy(rel):
+            dst_path = dst / rel
+            dst_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(path, dst_path)
 
 root = src / "gsm8k_improved"
 if root.exists():

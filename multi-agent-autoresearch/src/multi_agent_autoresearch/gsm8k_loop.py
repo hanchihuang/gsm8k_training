@@ -84,18 +84,14 @@ class GSM8KLoopState:
 
 def _proposal_ladder() -> list[tuple[str, dict[str, str]]]:
     return [
-        ("numc14", {"EVAL_NUM_CANDIDATES": "14"}),
-        ("numc16", {"EVAL_NUM_CANDIDATES": "16"}),
         ("numc12_top_p095", {"EVAL_NUM_CANDIDATES": "12", "EVAL_RERANK_TOP_P": "0.95"}),
-        ("numc14_top_p095", {"EVAL_NUM_CANDIDATES": "14", "EVAL_RERANK_TOP_P": "0.95"}),
         ("numc12_temp07_top_p095", {"EVAL_NUM_CANDIDATES": "12", "EVAL_RERANK_TEMPERATURE": "0.7", "EVAL_RERANK_TOP_P": "0.95"}),
-        ("numc14_temp07_top_p095", {"EVAL_NUM_CANDIDATES": "14", "EVAL_RERANK_TEMPERATURE": "0.7", "EVAL_RERANK_TOP_P": "0.95"}),
-        ("numc16_temp07_top_p095", {"EVAL_NUM_CANDIDATES": "16", "EVAL_RERANK_TEMPERATURE": "0.7", "EVAL_RERANK_TOP_P": "0.95"}),
         ("numc12_verifier025", {"EVAL_NUM_CANDIDATES": "12", "VERIFIER_SCORE_WEIGHT": "0.25"}),
-        ("numc14_verifier025", {"EVAL_NUM_CANDIDATES": "14", "VERIFIER_SCORE_WEIGHT": "0.25"}),
         ("numc12_top_p095_ver025", {"EVAL_NUM_CANDIDATES": "12", "EVAL_RERANK_TOP_P": "0.95", "VERIFIER_SCORE_WEIGHT": "0.25"}),
-        ("numc14_top_p095_ver025", {"EVAL_NUM_CANDIDATES": "14", "EVAL_RERANK_TOP_P": "0.95", "VERIFIER_SCORE_WEIGHT": "0.25"}),
-        ("numc18", {"EVAL_NUM_CANDIDATES": "18"}),
+        ("numc12_temp07_ver025", {"EVAL_NUM_CANDIDATES": "12", "EVAL_RERANK_TEMPERATURE": "0.7", "VERIFIER_SCORE_WEIGHT": "0.25"}),
+        ("numc12_temp07_top_p095_ver025", {"EVAL_NUM_CANDIDATES": "12", "EVAL_RERANK_TEMPERATURE": "0.7", "EVAL_RERANK_TOP_P": "0.95", "VERIFIER_SCORE_WEIGHT": "0.25"}),
+        ("numc12_verifier03", {"EVAL_NUM_CANDIDATES": "12", "VERIFIER_SCORE_WEIGHT": "0.3"}),
+        ("numc12_top_p095_ver03", {"EVAL_NUM_CANDIDATES": "12", "EVAL_RERANK_TOP_P": "0.95", "VERIFIER_SCORE_WEIGHT": "0.3"}),
     ]
 
 
@@ -111,18 +107,33 @@ class GSM8KLoopRunner:
 
     def run(self) -> GSM8KLoopState:
         base_env = _load_env_file(self.config.baseline_env_path)
-        initial_best = 0.0
-        initial_count = 0
         state = GSM8KLoopState(
             config=self.config,
             started_at=utc_now(),
-            best_metric=initial_best,
-            best_exact_match_count=initial_count,
+            best_metric=0.0,
+            best_exact_match_count=0,
             best_label="baseline-env",
             best_output_dir="",
             current_env=dict(base_env),
         )
         self._write_state(state)
+
+        baseline_iteration = self._run_iteration(
+            state,
+            -1,
+            "baseline",
+            {},
+        )
+        state.iterations.append(baseline_iteration)
+        if baseline_iteration.status != "failed":
+            state.best_metric = baseline_iteration.metric
+            state.best_exact_match_count = baseline_iteration.exact_match_count
+            state.best_label = baseline_iteration.label
+            state.best_output_dir = baseline_iteration.output_dir
+            baseline_iteration.status = "keep"
+            baseline_iteration.notes.append("seed-baseline")
+        self._write_state(state)
+        self._maybe_sync_repo(state, "baseline")
 
         proposals = _proposal_ladder()
         iteration_index = 0
@@ -205,6 +216,10 @@ class GSM8KLoopRunner:
             iteration.status = "failed"
             iteration.completed_at = utc_now()
             iteration.notes.append(f"returncode={completed.returncode}")
+            if log_path.exists():
+                log_text = log_path.read_text(encoding="utf-8", errors="ignore").lower()
+                if "outofmemoryerror" in log_text or "cuda out of memory" in log_text:
+                    iteration.notes.append("resource_failure=oom")
             return iteration
         metric, count = _safe_metric(summary_path, self.config.metric_section)
         iteration.metric = metric
@@ -224,6 +239,6 @@ class GSM8KLoopRunner:
         if not script.exists() or not repo.exists():
             return
         subprocess.run(
-            [str(script), str(self.config.script_path.parent.parent), str(repo), f"mar-loop-{label}"],
+            [str(script), str(self.config.script_path.parent), str(repo), f"mar-loop-{label}"],
             check=False,
         )

@@ -7,6 +7,7 @@ from pathlib import Path
 from multi_agent_autoresearch.engine import AutoResearchEngine
 from multi_agent_autoresearch.gsm8k_loop import GSM8KLoopConfig, GSM8KLoopRunner
 from multi_agent_autoresearch.models import RunConfig
+from multi_agent_autoresearch.supervisor import GSM8KSupervisorConfig, GSM8KSupervisorRunner
 
 
 LANDSCAPE_SNAPSHOT = [
@@ -111,6 +112,45 @@ def build_parser() -> argparse.ArgumentParser:
         default="/home/user/图片/gsm8k_training_repo",
     )
 
+    supervise_parser = subparsers.add_parser(
+        "gsm8k-supervise",
+        help="Wait for a PID to exit and then launch a GSM8K loop reliably",
+    )
+    supervise_parser.add_argument("--output-dir", required=True, type=Path)
+    supervise_parser.add_argument("--baseline-env", required=True, type=Path)
+    supervise_parser.add_argument("--script-path", required=True, type=Path)
+    supervise_parser.add_argument("--wait-pid", type=int, default=0)
+    supervise_parser.add_argument("--poll-seconds", type=float, default=5.0)
+    supervise_parser.add_argument(
+        "--local-root",
+        action="append",
+        default=[],
+        help="Local roots for the research wave; repeatable",
+    )
+    supervise_parser.add_argument(
+        "--query",
+        default="How should the GSM8K confirm200 line improve beyond the current retained baseline?",
+    )
+    supervise_parser.add_argument(
+        "--metric-section",
+        default="eval_after",
+        choices=["eval_before", "eval_after", "eval_warmup"],
+    )
+    supervise_parser.add_argument(
+        "--iterations",
+        default=0,
+        type=int,
+        help="0 means keep iterating until externally stopped",
+    )
+    supervise_parser.add_argument(
+        "--sync-script",
+        default="/home/user/图片/gsm8k_improved/sync_experiment_to_git_repo.sh",
+    )
+    supervise_parser.add_argument(
+        "--sync-repo",
+        default="/home/user/图片/gsm8k_training_repo",
+    )
+
     return parser
 
 
@@ -178,6 +218,34 @@ def main() -> None:
             "best_exact_match_count": state.best_exact_match_count,
             "best_label": state.best_label,
             "iterations": len(state.iterations),
+        }
+        print(json.dumps(summary, ensure_ascii=False, indent=2))
+        return
+
+    if args.command == "gsm8k-supervise":
+        loop_config = GSM8KLoopConfig(
+            query=args.query,
+            output_dir=args.output_dir,
+            baseline_env_path=args.baseline_env,
+            script_path=args.script_path,
+            local_roots=list(args.local_root),
+            metric_section=args.metric_section,
+            max_rounds=args.iterations,
+            sync_script=args.sync_script,
+            sync_repo=args.sync_repo,
+        )
+        config = GSM8KSupervisorConfig(
+            wait_pid=args.wait_pid if args.wait_pid > 0 else None,
+            loop_config=loop_config,
+            poll_seconds=args.poll_seconds,
+        )
+        state = GSM8KSupervisorRunner(config).run()
+        summary = {
+            "output_dir": str(loop_config.output_dir),
+            "wait_pid": config.wait_pid,
+            "loop_best_metric": None if state.loop_state is None else state.loop_state.best_metric,
+            "loop_best_exact_match_count": None if state.loop_state is None else state.loop_state.best_exact_match_count,
+            "loop_best_label": None if state.loop_state is None else state.loop_state.best_label,
         }
         print(json.dumps(summary, ensure_ascii=False, indent=2))
         return

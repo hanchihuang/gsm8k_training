@@ -1,0 +1,4 @@
+early_stop_sample=40
+exact_matches=19
+observed_rate=0.475
+threshold=0.5149999999999999

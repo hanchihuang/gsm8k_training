@@ -1,0 +1,7 @@
+{
+  "run_summary": "/home/user/图片/multi-agent-autoresearch/outputs/gsm8k_push60_autoloop_forever_20260407_v2/runs/iter_-01_baseline/run_summary.json",
+  "section": "eval_after",
+  "rows_with_candidates": 0,
+  "pairwise_rows": 0,
+  "hard_case_count": 0
+}

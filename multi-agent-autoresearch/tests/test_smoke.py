@@ -6,7 +6,14 @@ import unittest
 from pathlib import Path
 
 from multi_agent_autoresearch.engine import AutoResearchEngine
-from multi_agent_autoresearch.gsm8k_loop import GSM8KLoopConfig, GSM8KLoopRunner
+from multi_agent_autoresearch.gsm8k_loop import (
+    GSM8KLoopConfig,
+    GSM8KLoopRunner,
+    GSM8KLoopState,
+    _build_dynamic_proposals,
+    _diagnose_run_summary,
+    _infer_required_eval_dataset_name,
+)
 from multi_agent_autoresearch.models import RunConfig
 
 
@@ -194,9 +201,201 @@ class SmokeTest(unittest.TestCase):
             state = GSM8KLoopRunner(config).run()
             self.assertTrue((output_dir / "loop_state.json").exists())
             payload = json.loads((output_dir / "loop_state.json").read_text())
-            self.assertEqual(payload["best_exact_match_count"], 100)
-            self.assertEqual(len(payload["iterations"]), 2)
+            self.assertEqual(payload["best_exact_match_count"], 99)
+            self.assertEqual(len(payload["iterations"]), 3)
             self.assertGreaterEqual(state.best_metric, 0.495)
+            self.assertTrue((output_dir / "director_summary.md").exists())
+
+    def test_gsm8k_loop_runner_uses_baseline_runner_and_handles_early_stop(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            baseline_env = root / "baseline.env"
+            baseline_env.write_text("export DATASET_SOURCE='gsm8k'\n", encoding="utf-8")
+            fake_script = root / "unused.py"
+            fake_script.write_text("print('unused')\n", encoding="utf-8")
+            fake_runner = root / "runner.sh"
+            fake_runner.write_text(
+                "#!/usr/bin/env bash\n"
+                "set -euo pipefail\n"
+                "name=\"$1\"\n"
+                "out=\"${OUTPUT_DIR:?}\"\n"
+                "mkdir -p \"$out\"\n"
+                "if [[ \"$name\" == *selector* ]]; then\n"
+                "  printf 'observed_rate=0.375\\n' > \"$out/early_stop.txt\"\n"
+                "  exit 10\n"
+                "fi\n"
+                "python3 - <<'PY'\n"
+                "import json, os\n"
+                "from pathlib import Path\n"
+                "out = Path(os.environ['OUTPUT_DIR'])\n"
+                "payload = {'eval_before': {'exact_match_rate': 0.515, 'exact_match_count': 103, 'rows': []}, 'eval_after': {'exact_match_rate': 0.515, 'exact_match_count': 103, 'rows': []}}\n"
+                "(out / 'run_summary.json').write_text(json.dumps(payload), encoding='utf-8')\n"
+                "PY\n",
+                encoding="utf-8",
+            )
+            fake_runner.chmod(0o755)
+            output_dir = root / "loop_out"
+            config = GSM8KLoopConfig(
+                query="Improve gsm8k baseline",
+                output_dir=output_dir,
+                baseline_env_path=baseline_env,
+                script_path=fake_script,
+                runner_path=fake_runner,
+                local_roots=[str(root)],
+                max_rounds=1,
+                enable_research_wave=False,
+                sync_script=str(root / "missing_sync.sh"),
+                sync_repo=str(root / "missing_repo"),
+            )
+            state = GSM8KLoopRunner(config).run()
+            self.assertEqual(len(state.iterations), 2)
+            self.assertEqual(state.iterations[1].status, "early_stop")
+            self.assertIn("runner_early_stop", state.iterations[1].notes)
+
+    def test_gsm8k_loop_runner_resumes_existing_state(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            baseline_env = root / "baseline.env"
+            baseline_env.write_text("export DATASET_SOURCE='gsm8k'\n", encoding="utf-8")
+            fake_script = root / "fake_eval.py"
+            fake_script.write_text(
+                "from __future__ import annotations\n"
+                "import json, os\n"
+                "from pathlib import Path\n"
+                "out = Path(os.environ['OUTPUT_DIR'])\n"
+                "out.mkdir(parents=True, exist_ok=True)\n"
+                "temp = os.environ.get('EVAL_RERANK_TEMPERATURE', '0.65')\n"
+                "metric = 0.52 if temp == '0.7' else 0.515\n"
+                "count = int(metric * 200)\n"
+                "payload = {\n"
+                "  'eval_before': {'exact_match_rate': metric, 'exact_match_count': count, 'rows': []},\n"
+                "  'eval_after': {'exact_match_rate': metric, 'exact_match_count': count, 'rows': []},\n"
+                "}\n"
+                "(out / 'run_summary.json').write_text(json.dumps(payload), encoding='utf-8')\n",
+                encoding="utf-8",
+            )
+            output_dir = root / "loop_out"
+            config = GSM8KLoopConfig(
+                query="Improve gsm8k baseline",
+                output_dir=output_dir,
+                baseline_env_path=baseline_env,
+                script_path=fake_script,
+                local_roots=[str(root)],
+                max_rounds=1,
+                enable_research_wave=False,
+                sync_script=str(root / "missing_sync.sh"),
+                sync_repo=str(root / "missing_repo"),
+            )
+            GSM8KLoopRunner(config).run()
+            resumed = GSM8KLoopRunner(
+                GSM8KLoopConfig(
+                    query="Improve gsm8k baseline",
+                    output_dir=output_dir,
+                    baseline_env_path=baseline_env,
+                    script_path=fake_script,
+                    local_roots=[str(root)],
+                    max_rounds=2,
+                    enable_research_wave=False,
+                    sync_script=str(root / "missing_sync.sh"),
+                    sync_repo=str(root / "missing_repo"),
+                )
+            ).run()
+            self.assertGreaterEqual(len(resumed.iterations), 3)
+            self.assertGreaterEqual(resumed.best_metric, 0.515)
+
+    def test_infer_required_eval_dataset_name_prefers_train_validation_split(self) -> None:
+        env = {
+            "DATASET_SOURCE": "gsm8k",
+            "DATASET_SPLIT": "train",
+            "TRAIN_VALIDATION_MOD": "5",
+            "TRAIN_VALIDATION_BUCKET": "2",
+        }
+        self.assertEqual(
+            _infer_required_eval_dataset_name(env),
+            "gsm8k_train_validation_mod5_bucket2",
+        )
+
+    def test_diagnosis_reads_error_attribution_patterns(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            summary = Path(tmpdir) / "run_summary.json"
+            payload = {
+                "eval_after": {
+                    "exact_match_rate": 0.5,
+                    "exact_match_count": 100,
+                    "rows": [],
+                    "error_attribution": {
+                        "wrong::rate_ratio_unit_chain::large_numeric_error": 9,
+                        "wrong::percentage_discount_growth::large_numeric_error": 7,
+                        "correct::other": 11,
+                    },
+                },
+                "eval_dataset_name": "gsm8k_train_validation_mod5_bucket0",
+            }
+            summary.write_text(json.dumps(payload), encoding="utf-8")
+            diagnosis = _diagnose_run_summary(summary, "eval_after")
+            self.assertEqual(
+                diagnosis["top_wrong_patterns"][0],
+                "wrong::rate_ratio_unit_chain::large_numeric_error",
+            )
+            self.assertEqual(
+                diagnosis["eval_dataset_name"],
+                "gsm8k_train_validation_mod5_bucket0",
+            )
+
+    def test_dynamic_proposals_prioritize_validation_failure_modes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            baseline_env = root / "baseline.env"
+            baseline_env.write_text(
+                "\n".join(
+                    [
+                        "export DATASET_SOURCE='gsm8k'",
+                        "export DATASET_SPLIT='train'",
+                        "export TRAIN_VALIDATION_MOD='5'",
+                        "export TRAIN_VALIDATION_BUCKET='0'",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            config = GSM8KLoopConfig(
+                query="Improve gsm8k baseline",
+                output_dir=root / "loop_out",
+                baseline_env_path=baseline_env,
+                script_path=root / "fake.py",
+                local_roots=[str(root)],
+                max_rounds=1,
+                enable_research_wave=False,
+                sync_script=str(root / "missing_sync.sh"),
+                sync_repo=str(root / "missing_repo"),
+            )
+            state = GSM8KLoopState(
+                config=config,
+                started_at="2026-04-10T00:00:00Z",
+                best_metric=0.5,
+                best_exact_match_count=100,
+                best_label="baseline-env",
+                best_output_dir="",
+                current_env={},
+                external_history={},
+            )
+            state.latest_diagnosis = {
+                "exact_match_rate": 0.5,
+                "bottom_slices": ["percentage", "rate_or_ratio"],
+                "top_wrong_patterns": [
+                    "wrong::rate_ratio_unit_chain::large_numeric_error",
+                    "wrong::percentage_discount_growth::large_numeric_error",
+                ],
+                "strict_xml_rate": 1.0,
+                "numeric_answer_rate": 1.0,
+                "gap": 0.08,
+                "correctness_reward_mean": 3.0,
+                "distance_reward_mean": 0.25,
+            }
+            proposals = _build_dynamic_proposals(state)
+            top_labels = [item.label for item in proposals[:3]]
+            self.assertIn("selector_numc12_verifier03_expand", top_labels)
+            self.assertIn("data_quality_strict_065_min22_validation", top_labels)
 
 
 if __name__ == "__main__":

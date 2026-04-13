@@ -1,0 +1,2 @@
+stopped_at=2026-04-13T22:18:38+08:00
+reason=switching metric from validation to gsm8k_test; no final adapter produced

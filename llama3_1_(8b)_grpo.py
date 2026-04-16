@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import os
 import re
+import ast
 import json
 import pickle
 import random
@@ -2286,29 +2287,173 @@ def reasoning_sanity_reward_func(completions, **kwargs) -> list[float]:
     return rewards
 
 
-def evaluate_simple_equation(equation_text: str) -> str | None:
-    compact = equation_text.replace(" ", "")
-    match = re.fullmatch(r"(-?\d+)([+\-*/])(-?\d+)=(-?\d+)", compact)
-    if not match:
+def normalize_equation_text(text: str) -> str:
+    normalized = text
+    normalized = re.sub(r"\\frac\s*\{([^{}]+)\}\s*\{([^{}]+)\}", r"(\1/\2)", normalized)
+    normalized = normalized.replace("\\times", "*")
+    normalized = normalized.replace("\\cdot", "*")
+    normalized = normalized.replace("\\div", "/")
+    normalized = normalized.replace("×", "*")
+    normalized = normalized.replace("÷", "/")
+    normalized = normalized.replace("−", "-")
+    normalized = normalized.replace("–", "-")
+    normalized = normalized.replace("—", "-")
+    normalized = normalized.replace("≈", "=")
+    normalized = normalized.replace("\\approx", "=")
+    normalized = normalized.replace("\\ldots", "")
+    normalized = re.sub(r"\\text\{[^{}]*\}", " ", normalized)
+    normalized = re.sub(r"\\left|\\right", " ", normalized)
+    normalized = normalized.replace("$", "")
+    normalized = normalized.replace(",", "")
+    normalized = normalized.replace("%", "")
+    normalized = normalized.replace("^", "")
+    normalized = re.sub(r"\\[()\[\]]", " ", normalized)
+    normalized = re.sub(r"\b(?:approximately|approx\.?|about)\b", " ", normalized, flags=re.IGNORECASE)
+    normalized = re.sub(r"\s+", " ", normalized)
+    return normalized.strip()
+
+
+def safe_eval_numeric_expression(expr: str) -> float | None:
+    allowed_nodes = (
+        ast.Expression,
+        ast.BinOp,
+        ast.UnaryOp,
+        ast.Add,
+        ast.Sub,
+        ast.Mult,
+        ast.Div,
+        ast.USub,
+        ast.UAdd,
+        ast.Constant,
+    )
+    try:
+        node = ast.parse(expr, mode="eval")
+    except SyntaxError:
         return None
 
-    left = int(match.group(1))
-    operator = match.group(2)
-    right = int(match.group(3))
-    claimed = int(match.group(4))
-
-    if operator == "+":
-        actual = left + right
-    elif operator == "-":
-        actual = left - right
-    elif operator == "*":
-        actual = left * right
-    else:
-        if right == 0 or left % right != 0:
+    for child in ast.walk(node):
+        if not isinstance(child, allowed_nodes):
             return None
-        actual = left // right
+        if isinstance(child, ast.Constant) and not isinstance(child.value, (int, float)):
+            return None
 
-    return str(actual) if actual == claimed else None
+    try:
+        value = eval(compile(node, "<equation>", "eval"), {"__builtins__": {}}, {})
+    except Exception:
+        return None
+    if not isinstance(value, (int, float)) or not math.isfinite(float(value)):
+        return None
+    return float(value)
+
+
+def normalize_numeric_result(value: float) -> str:
+    if math.isclose(value, round(value), abs_tol=1e-6):
+        return str(int(round(value)))
+    return format(value, ".6g")
+
+
+def extract_equation_candidates(reasoning_text: str) -> list[str]:
+    normalized = normalize_equation_text(reasoning_text)
+    if not normalized:
+        return []
+    return re.findall(
+        r"((?:\(?\s*-?\d+(?:\.\d+)?\s*\)?\s*(?:[+\-*/]\s*\(?\s*-?\d+(?:\.\d+)?\s*\)?\s*)+)=\s*-?\d+(?:\.\d+)?)",
+        normalized,
+    )
+
+
+def analyze_equation(equation_text: str) -> dict[str, Any] | None:
+    compact = normalize_equation_text(equation_text)
+    if "=" not in compact:
+        return None
+    left_text, claimed_text = compact.split("=", 1)
+    left_text = left_text.strip()
+    claimed_text = claimed_text.strip().strip(".")
+    if not left_text or not claimed_text:
+        return None
+    if not re.fullmatch(r"-?\d+(?:\.\d+)?", claimed_text):
+        return None
+    actual_value = safe_eval_numeric_expression(left_text)
+    if actual_value is None:
+        return None
+    claimed_value = float(claimed_text)
+    return {
+        "actual_value": actual_value,
+        "claimed_value": claimed_value,
+        "exact_match": math.isclose(actual_value, claimed_value, abs_tol=1e-6),
+        "actual_text": normalize_numeric_result(actual_value),
+        "claimed_text": normalize_numeric_result(claimed_value),
+        "is_non_integer": not math.isclose(actual_value, round(actual_value), abs_tol=1e-6),
+    }
+
+
+def evaluate_simple_equation(equation_text: str) -> str | None:
+    details = analyze_equation(equation_text)
+    if details is None or not details["exact_match"]:
+        return None
+    return str(details["claimed_text"])
+
+
+def rounding_heuristic_score(question_text: str, candidate_text: str, predicted_answer: str) -> float:
+    predicted = canonicalize_numeric_text(predicted_answer)
+    if not predicted or not re.fullmatch(r"-?\d+(?:\.\d+)?", predicted):
+        return 0.0
+
+    normalized_question = normalize_equation_text(question_text).lower()
+    normalized_candidate = normalize_equation_text(candidate_text).lower()
+    score = 0.0
+
+    has_count_rounding_cue = any(
+        cue in normalized_candidate
+        for cue in (
+            "can't buy a fraction",
+            "cannot buy a fraction",
+            "round up",
+            "rounded up",
+            "rounding up",
+            "at least",
+            "whole bag",
+            "whole number of bags",
+        )
+    )
+    has_money_rounding_cue = any(
+        cue in normalized_candidate
+        for cue in ("round down", "rounded down", "nearest dollar", "nearest whole dollar")
+    )
+    question_mentions_rounding = any(
+        cue in normalized_question
+        for cue in ("round", "nearest", "whole number", "whole dollar", "fraction")
+    )
+    predicted_value = float(predicted)
+
+    for equation_text in extract_equation_candidates(candidate_text):
+        details = analyze_equation(equation_text)
+        if details is None or not details["is_non_integer"]:
+            continue
+        actual_value = details["actual_value"]
+        floor_value = math.floor(actual_value)
+        ceil_value = math.ceil(actual_value)
+        if (
+            has_count_rounding_cue
+            and actual_value >= 1.0
+            and math.isclose(predicted_value, ceil_value, abs_tol=1e-6)
+        ):
+            score += 0.12
+        elif has_money_rounding_cue and not question_mentions_rounding and math.isclose(
+            predicted_value,
+            floor_value,
+            abs_tol=1e-6,
+        ):
+            score -= 0.14
+        elif (
+            actual_value > 0.0
+            and math.isclose(predicted_value, floor_value, abs_tol=1e-6)
+            and floor_value != ceil_value
+            and not question_mentions_rounding
+            and not has_count_rounding_cue
+        ):
+            score -= 0.06
+    return score
 
 
 def equation_consistency_reward_func(completions, **kwargs) -> list[float]:
@@ -2317,15 +2462,15 @@ def equation_consistency_reward_func(completions, **kwargs) -> list[float]:
     for response in responses:
         reasoning_text = extract_reasoning_text(response)
         predicted_answer = normalize_answer(extract_xml_answer(response))
-        equation_candidates = re.findall(r"-?\d+\s*[+\-*/]\s*-?\d+\s*=\s*-?\d+", reasoning_text)
+        equation_candidates = extract_equation_candidates(reasoning_text)
 
         if not equation_candidates:
             rewards.append(0.0)
             continue
 
-        valid_results = [evaluate_simple_equation(candidate) for candidate in equation_candidates]
-        valid_results = [result for result in valid_results if result is not None]
-        invalid_count = len(equation_candidates) - len(valid_results)
+        analyzed = [analyze_equation(candidate) for candidate in equation_candidates]
+        valid_results = [item["claimed_text"] for item in analyzed if item is not None and item["exact_match"]]
+        invalid_count = sum(1 for item in analyzed if item is None or not item["exact_match"])
 
         score = 0.0
         if valid_results:
@@ -3572,25 +3717,42 @@ def compute_candidate_novelty(candidate_text: str, other_texts: list[str]) -> fl
     return max(0.0, 1.0 - max_overlap)
 
 
-def compute_candidate_equation_support(candidate_text: str, predicted_answer: str) -> float:
+def compute_candidate_equation_support(question_text: str, candidate_text: str, predicted_answer: str) -> float:
     reasoning_text = extract_reasoning_text(candidate_text)
-    equation_candidates = re.findall(r"-?\d+\s*[+\-*/]\s*-?\d+\s*=\s*-?\d+", reasoning_text)
+    equation_candidates = extract_equation_candidates(reasoning_text)
     if not equation_candidates:
-        return 0.0
+        return rounding_heuristic_score(question_text, candidate_text, predicted_answer)
 
-    valid_results = [evaluate_simple_equation(candidate) for candidate in equation_candidates]
-    valid_results = [result for result in valid_results if result is not None]
-    invalid_count = len(equation_candidates) - len(valid_results)
+    analyzed = [analyze_equation(candidate) for candidate in equation_candidates]
+    valid_results = [item["claimed_text"] for item in analyzed if item is not None and item["exact_match"]]
+    invalid_count = sum(1 for item in analyzed if item is None or not item["exact_match"])
+    approximate_results = [
+        item["actual_text"]
+        for item in analyzed
+        if item is not None and item["is_non_integer"]
+    ]
 
     score = 0.0
     if valid_results:
-        score += min(0.18, 0.08 * len(valid_results))
+        score += min(0.22, 0.06 * len(valid_results))
         if predicted_answer and predicted_answer in valid_results:
             score += 0.12
+    if approximate_results and predicted_answer:
+        predicted_value = canonicalize_numeric_text(predicted_answer)
+        for result_text in approximate_results:
+            try:
+                result_value = float(result_text)
+                predicted_float = float(predicted_value)
+            except ValueError:
+                continue
+            if math.isclose(predicted_float, math.ceil(result_value), abs_tol=1e-6) and result_value >= 1.0:
+                score += 0.08
+                break
     if invalid_count > 0:
         score -= min(0.3, 0.12 * invalid_count)
         if predicted_answer and predicted_answer not in valid_results:
             score -= 0.05
+    score += rounding_heuristic_score(question_text, candidate_text, predicted_answer)
     return score
 
 
@@ -3647,6 +3809,7 @@ def build_candidate_rows(
         other_texts = [text for text in all_texts if text != row["text"]]
         row["novelty"] = compute_candidate_novelty(row["text"], other_texts)
         row["equation_support"] = compute_candidate_equation_support(
+            user_text,
             row["text"],
             row["predicted_answer"],
         )

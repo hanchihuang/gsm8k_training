@@ -138,6 +138,13 @@ def infer_run_protocol() -> str:
     return "scout" if infer_scout_like_run() else "standard"
 
 
+IGNORED_LEGACY_RERANK_ENV_NAMES = (
+    "ENABLE_RERANKER_NEAR_TOP_OVERRIDE",
+    "RERANKER_NEAR_TOP_MARGIN",
+    "RERANKER_NEAR_TOP_MIN_SCORE",
+)
+
+
 def default_gsm8k_adapter_path() -> str:
     candidate = Path("outputs_llama3_1_grpo_gsm8k_rerank_eval/adapter")
     return str(candidate) if candidate.exists() else ""
@@ -4397,6 +4404,8 @@ def save_run_artifacts(
         "answer_agg_margin": ANSWER_AGG_MARGIN,
         "answer_agg_pair_count_weight": ANSWER_AGG_PAIR_COUNT_WEIGHT,
         "answer_agg_pair_max_single_gap": ANSWER_AGG_PAIR_MAX_SINGLE_GAP,
+        "reranker_score_weight": RERANKER_SCORE_WEIGHT,
+        "reranker_strict_only": RERANKER_STRICT_ONLY,
         "verifier_bundle_path": VERIFIER_BUNDLE_PATH,
         "verifier_score_weight": VERIFIER_SCORE_WEIGHT,
         "verifier_tie_margin": VERIFIER_TIE_MARGIN,
@@ -5057,6 +5066,15 @@ def run_single_experiment():
     print(f"[info] eval_expand_require_base_pass_support={EVAL_EXPAND_REQUIRE_BASE_PASS_SUPPORT}", flush=True)
     print(f"[info] eval_use_scout_hints={EVAL_USE_SCOUT_HINTS}", flush=True)
     print(f"[info] eval_only={EVAL_ONLY}", flush=True)
+    ignored_legacy_rerank_env = [
+        name for name in IGNORED_LEGACY_RERANK_ENV_NAMES if env_present(name)
+    ]
+    if ignored_legacy_rerank_env:
+        print(
+            "[warn] ignored legacy reranker env vars present: "
+            + ", ".join(ignored_legacy_rerank_env),
+            flush=True,
+        )
     print(
         "[info] grpo_dynamics="
         + json.dumps(
@@ -5114,6 +5132,8 @@ def run_single_experiment():
                 "novelty": NOVELTY_WEIGHT,
                 "answer_agg_pair_count": ANSWER_AGG_PAIR_COUNT_WEIGHT,
                 "answer_agg_pair_max_single_gap": ANSWER_AGG_PAIR_MAX_SINGLE_GAP,
+                "reranker_score_weight": RERANKER_SCORE_WEIGHT,
+                "reranker_strict_only": RERANKER_STRICT_ONLY,
                 "temperature": EVAL_RERANK_TEMPERATURE,
                 "top_p": EVAL_RERANK_TOP_P,
             },
